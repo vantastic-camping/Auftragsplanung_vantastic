@@ -214,6 +214,102 @@
   }
   .btn-icon:hover { background: var(--gray-100); }
 
+  /* ===== FILTER BAR ===== */
+  .filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding: 12px 16px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+
+  .filter-bar input {
+    flex: 1;
+    min-width: 120px;
+    padding: 7px 12px;
+    border: 1px solid var(--gray-200);
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .filter-bar input:focus { border-color: var(--black); }
+  .filter-bar input::placeholder { color: var(--gray-300); }
+
+  .filter-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--gray-500);
+    align-self: center;
+    white-space: nowrap;
+    margin-right: 2px;
+  }
+
+  .filter-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 130px;
+  }
+
+  .filter-clear {
+    background: none;
+    border: 1px solid var(--gray-200);
+    border-radius: 6px;
+    padding: 7px 12px;
+    font-size: 11px;
+    color: var(--gray-500);
+    cursor: pointer;
+    white-space: nowrap;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .filter-clear:hover { border-color: var(--black); color: var(--black); }
+
+  /* ===== BACKUP BUTTON ===== */
+  .btn-backup {
+    background: var(--white);
+    color: var(--gray-700);
+    border: 1px solid var(--gray-200);
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn-backup:hover { border-color: var(--black); color: var(--black); }
+
+  /* ===== BACKUP MODAL ===== */
+  .backup-modal-body { display: flex; flex-direction: column; gap: 14px; }
+  .backup-option {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .backup-option:hover { border-color: var(--black); background: var(--gray-50); }
+  .backup-option .bo-icon { font-size: 24px; flex-shrink: 0; }
+  .backup-option .bo-text h4 { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+  .backup-option .bo-text p { font-size: 12px; color: var(--gray-500); }
+
   /* ===== TABLE ===== */
   .orders-table {
     background: var(--white);
@@ -225,7 +321,7 @@
 
   .table-head {
     display: grid;
-    grid-template-columns: 120px 1fr 140px 130px 130px 50px;
+    grid-template-columns: 110px 1fr 130px 110px 120px 120px 50px;
     padding: 12px 20px;
     background: var(--gray-50);
     border-bottom: 1px solid var(--gray-200);
@@ -238,7 +334,7 @@
 
   .table-row {
     display: grid;
-    grid-template-columns: 120px 1fr 140px 130px 130px 50px;
+    grid-template-columns: 110px 1fr 130px 110px 120px 120px 50px;
     padding: 14px 20px;
     border-bottom: 1px solid var(--gray-100);
     align-items: center;
@@ -722,14 +818,22 @@
   }
 
   /* ===== RESPONSIVE ===== */
-  @media (max-width: 768px) {
+  @media (max-width: 900px) {
     .table-head, .table-row {
-      grid-template-columns: 100px 1fr 100px 50px;
+      grid-template-columns: 90px 1fr 100px 110px 50px;
     }
-    .col-produktnr, .col-erstelldatum { display: none; }
+    .col-kunde, .col-produktnr { display: none; }
+  }
+  @media (max-width: 600px) {
+    .table-head, .table-row {
+      grid-template-columns: 80px 1fr 100px 50px;
+    }
+    .col-kunde, .col-produktnr, .col-liefertermin { display: none; }
     .detail-header { flex-direction: column; align-items: flex-start; }
     .detail-actions { flex-wrap: wrap; }
     .form-grid { grid-template-columns: 1fr; }
+    .filter-bar { flex-direction: column; }
+    .filter-group { min-width: unset; }
   }
 
   /* ===== LOADING ===== */
@@ -865,17 +969,37 @@
         <option value="rechnungsNr">Rechnungs-Nr. ↑</option>
         <option value="liefertermin">Lieferdatum ↑</option>
       </select>
+      <button class="btn-backup" onclick="openBackupModal()" title="Datensicherung">🗄 Backup</button>
       <button class="btn-primary" onclick="openNewOrder()">
         <span style="font-size:18px;line-height:1">+</span> Neuer Auftrag
       </button>
     </div>
 
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+      <span class="filter-label">Filter:</span>
+      <div class="filter-group">
+        <input type="text" id="filterRechnungsNr" placeholder="Rechnungs-Nr." oninput="renderList()">
+      </div>
+      <div class="filter-group">
+        <input type="text" id="filterModul" placeholder="Modul" oninput="renderList()">
+      </div>
+      <div class="filter-group">
+        <input type="text" id="filterKunde" placeholder="Kunde" oninput="renderList()">
+      </div>
+      <div class="filter-group">
+        <input type="text" id="filterProduktNr" placeholder="Produkt-Nr." oninput="renderList()">
+      </div>
+      <button class="filter-clear" onclick="clearFilters()">✕ Filter löschen</button>
+    </div>
+
     <div class="orders-table">
       <div class="table-head">
         <div>Rechnungs-Nr.</div>
-        <div>Produkt</div>
+        <div>Modul</div>
+        <div class="col-kunde">Kunde</div>
         <div class="col-produktnr">Produkt-Nr.</div>
-        <div>Liefertermin</div>
+        <div class="col-liefertermin">Liefertermin</div>
         <div>Status</div>
         <div></div>
       </div>
@@ -913,8 +1037,12 @@
             <input type="text" id="fieldRechnungsNr" placeholder="z.B. RE-2024-001">
           </div>
           <div class="form-group">
-            <label>Produkt</label>
-            <input type="text" id="fieldProdukt" placeholder="Produktbezeichnung">
+            <label>Modul</label>
+            <input type="text" id="fieldModul" placeholder="Modulbezeichnung">
+          </div>
+          <div class="form-group">
+            <label>Kunde</label>
+            <input type="text" id="fieldKunde" placeholder="Kundenname">
           </div>
           <div class="form-group">
             <label>Produkt-Nr.</label>
@@ -1066,6 +1194,50 @@
     <div class="modal-footer">
       <button class="btn-primary" onclick="saveErgModal()">Datensatz anlegen</button>
       <button class="btn-secondary" onclick="closeErgModal()">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- BACKUP MODAL -->
+<div id="backupModal" class="modal-overlay">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <span class="modal-title">🗄 Datensicherung</span>
+      <button class="btn-icon" onclick="document.getElementById('backupModal').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="backup-modal-body">
+
+        <div class="backup-option" onclick="createBackup()">
+          <span class="bo-icon">💾</span>
+          <div class="bo-text">
+            <h4>Backup erstellen &amp; herunterladen</h4>
+            <p>Alle Auftragsdaten als JSON-Datei auf Ihrem Gerät speichern</p>
+          </div>
+        </div>
+
+        <div class="backup-option" onclick="document.getElementById('backupFileInput').click()">
+          <span class="bo-icon">📂</span>
+          <div class="bo-text">
+            <h4>Backup wiederherstellen</h4>
+            <p>Zuvor gespeicherte JSON-Backup-Datei laden und importieren</p>
+          </div>
+          <input type="file" id="backupFileInput" accept=".json" style="display:none" onchange="restoreBackup(this.files)">
+        </div>
+
+        <div class="backup-option" onclick="syncFromCloud()">
+          <span class="bo-icon">☁️</span>
+          <div class="bo-text">
+            <h4>Stand aus Cloud laden</h4>
+            <p>Aktuellste Daten aus Firebase abrufen und lokal aktualisieren</p>
+          </div>
+        </div>
+
+        <div id="backupStatus" style="font-size:12px;color:var(--gray-500);padding:4px 0;display:none"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="document.getElementById('backupModal').classList.remove('open')">Schließen</button>
     </div>
   </div>
 </div>
@@ -1267,22 +1439,42 @@ function showList() {
 }
 window.showList = showList;
 
+function clearFilters() {
+  ['filterRechnungsNr','filterModul','filterKunde','filterProduktNr'].forEach(id => {
+    const el = document.getElementById(id); if(el) el.value='';
+  });
+  renderList();
+}
+window.clearFilters = clearFilters;
+
 function renderList() {
   const search = (document.getElementById('searchInput')?.value || '').toLowerCase();
   const sort = document.getElementById('sortSelect')?.value || 'rechnungsNr';
+  const fRe  = (document.getElementById('filterRechnungsNr')?.value || '').toLowerCase();
+  const fMod = (document.getElementById('filterModul')?.value || '').toLowerCase();
+  const fKun = (document.getElementById('filterKunde')?.value || '').toLowerCase();
+  const fPNr = (document.getElementById('filterProduktNr')?.value || '').toLowerCase();
   const container = document.getElementById('ordersList');
   if (!container) return;
 
   let arr = Object.values(orders);
 
+  // Global search
   if (search) {
     arr = arr.filter(o =>
       (o.rechnungsNr||'').toLowerCase().includes(search) ||
-      (o.produkt||'').toLowerCase().includes(search) ||
+      (o.modul||'').toLowerCase().includes(search) ||
+      (o.kunde||'').toLowerCase().includes(search) ||
       (o.produktNr||'').toLowerCase().includes(search) ||
       (o.status||'').toLowerCase().includes(search)
     );
   }
+
+  // Column filters
+  if (fRe)  arr = arr.filter(o => (o.rechnungsNr||'').toLowerCase().includes(fRe));
+  if (fMod) arr = arr.filter(o => (o.modul||'').toLowerCase().includes(fMod));
+  if (fKun) arr = arr.filter(o => (o.kunde||'').toLowerCase().includes(fKun));
+  if (fPNr) arr = arr.filter(o => (o.produktNr||'').toLowerCase().includes(fPNr));
 
   arr.sort((a,b) => {
     if (sort === 'rechnungsNr') return (a.rechnungsNr||'').localeCompare(b.rechnungsNr||'');
@@ -1291,20 +1483,21 @@ function renderList() {
   });
 
   if (arr.length === 0) {
-    container.innerHTML = `<div class="empty-state"><div class="icon">📋</div><p>Noch keine Aufträge vorhanden.<br>Erstellen Sie einen neuen Auftrag mit dem + Button.</p></div>`;
+    container.innerHTML = `<div class="empty-state"><div class="icon">📋</div><p>Keine Aufträge gefunden.<br>Erstellen Sie einen neuen Auftrag mit dem + Button.</p></div>`;
     return;
   }
 
   container.innerHTML = arr.map(o => {
     const pdfLinks = (o.headPdfs||[]).map(p =>
-      `<span class="pdf-link" onclick="event.stopPropagation();openPdfPreview('${p.url}','${p.name||'PDF'}')">📄 ${(p.name||'PDF').slice(0,15)}</span>`
+      `<span class="pdf-link" onclick="event.stopPropagation();openPdfPreview('${p.url}','${p.name||'PDF'}')">📄 ${(p.name||'PDF').slice(0,12)}</span>`
     ).join(' ');
     return `
     <div class="table-row" onclick="openOrder('${o.id}')">
       <div class="table-cell rechnungs-nr">${o.rechnungsNr||'—'}</div>
-      <div class="table-cell">${o.produkt||'—'} ${pdfLinks}</div>
+      <div class="table-cell">${o.modul||'—'} ${pdfLinks}</div>
+      <div class="table-cell col-kunde">${o.kunde||'—'}</div>
       <div class="table-cell col-produktnr">${o.produktNr||'—'}</div>
-      <div class="table-cell">${formatDate(o.liefertermin)}</div>
+      <div class="table-cell col-liefertermin">${formatDate(o.liefertermin)}</div>
       <div class="table-cell"><span class="status-badge ${statusClass(o.status)}">${statusLabel(o.status)}</span></div>
       <div class="table-cell" style="text-align:right"><span style="color:var(--gray-300);font-size:18px">›</span></div>
     </div>`;
@@ -1315,7 +1508,7 @@ function renderList() {
 function openNewOrder() {
   const id = uid();
   const o = {
-    id, rechnungsNr:'', produkt:'', produktNr:'',
+    id, rechnungsNr:'', modul:'', kunde:'', produktNr:'',
     liefertermin:'', erstellungsdatum: today(),
     status:'inPlanung', headPdfs:[], headImgs:[],
     history:[], ergaenzungen:[]
@@ -1340,7 +1533,8 @@ function openOrder(id) {
   // Fields
   const set = (id, v) => { const el = document.getElementById(id); if(el) el.value = v||''; };
   set('fieldRechnungsNr', o.rechnungsNr);
-  set('fieldProdukt', o.produkt);
+  set('fieldModul', o.modul);
+  set('fieldKunde', o.kunde);
   set('fieldProduktNr', o.produktNr);
   set('fieldLiefertermin', o.liefertermin);
   set('fieldErstellungsdatum', o.erstellungsdatum);
@@ -1372,7 +1566,8 @@ function saveOrder() {
   if (!o) return;
   const get = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
   o.rechnungsNr = get('fieldRechnungsNr');
-  o.produkt = get('fieldProdukt');
+  o.modul = get('fieldModul');
+  o.kunde = get('fieldKunde');
   o.produktNr = get('fieldProduktNr');
   o.liefertermin = get('fieldLiefertermin');
   o.erstellungsdatum = get('fieldErstellungsdatum');
@@ -1930,7 +2125,8 @@ async function exportPDF() {
     y += 2;
     const fields = [
       ['Rechnungs-Nr.', o.rechnungsNr],
-      ['Produkt', o.produkt],
+      ['Modul', o.modul],
+      ['Kunde', o.kunde],
       ['Produkt-Nr.', o.produktNr],
       ['Liefertermin', formatDate(o.liefertermin)],
       ['Erstellungsdatum', formatDate(o.erstellungsdatum)],
@@ -1988,7 +2184,7 @@ async function exportPDF() {
     }
 
     // Generate filename
-    const prod = (o.produkt||'auftrag').slice(0,10).replace(/\s+/g,'_');
+    const prod = (o.modul||o.rechnungsNr||'auftrag').slice(0,10).replace(/\s+/g,'_');
     const latestDate = (o.history||[]).reduce((max, h) => h.date > max ? h.date : max, o.erstellungsdatum||today());
     const pdfName = `${prod}_${latestDate}.pdf`;
 
@@ -2071,6 +2267,94 @@ function checkDeepLink() {
     openOrder(orderId);
   }
 }
+
+// ===== BACKUP FUNCTIONS =====
+function openBackupModal() {
+  const m = document.getElementById('backupModal');
+  const s = document.getElementById('backupStatus');
+  if (s) { s.style.display='none'; s.textContent=''; }
+  if (m) m.classList.add('open');
+}
+window.openBackupModal = openBackupModal;
+
+function setBackupStatus(msg, color='var(--gray-500)') {
+  const s = document.getElementById('backupStatus');
+  if (s) { s.textContent = msg; s.style.color = color; s.style.display = 'block'; }
+}
+
+function createBackup() {
+  try {
+    const arr = Object.values(orders);
+    const data = {
+      version: 'V01',
+      app: 'Auftragsplanung VANtastic',
+      exportedAt: new Date().toISOString(),
+      count: arr.length,
+      orders: arr
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const ts = new Date().toISOString().slice(0,10);
+    a.href = url;
+    a.download = `auftragsplanung_backup_${ts}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setBackupStatus(`✓ Backup erstellt: ${arr.length} Aufträge gespeichert`, 'var(--status-green)');
+    showToast('Backup heruntergeladen ✓');
+  } catch(e) {
+    setBackupStatus('Fehler: ' + e.message, 'var(--status-red)');
+  }
+}
+window.createBackup = createBackup;
+
+async function restoreBackup(files) {
+  if (!files || !files.length) return;
+  const file = files[0];
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if (!data.orders || !Array.isArray(data.orders)) {
+      setBackupStatus('Ungültige Backup-Datei (kein orders-Array)', 'var(--status-red)');
+      return;
+    }
+    const count = data.orders.length;
+    // Confirm before overwriting
+    const m = document.getElementById('backupModal');
+    if (m) m.classList.remove('open');
+    showConfirm(
+      'Backup wiederherstellen',
+      `${count} Aufträge aus "${file.name}" importieren? Bestehende Daten werden überschrieben.`,
+      async () => {
+        orders = {};
+        data.orders.forEach(o => { if(o.id) orders[o.id] = o; });
+        await pushToFirebase(false);
+        renderList();
+        showToast(`${count} Aufträge wiederhergestellt ✓`);
+      }
+    );
+    // reset file input
+    const inp = document.getElementById('backupFileInput');
+    if (inp) inp.value = '';
+  } catch(e) {
+    openBackupModal();
+    setBackupStatus('Fehler beim Lesen: ' + e.message, 'var(--status-red)');
+  }
+}
+window.restoreBackup = restoreBackup;
+
+async function syncFromCloud() {
+  setBackupStatus('Lade Daten aus Firebase…', 'var(--status-yellow)');
+  try {
+    await pullFromFirebase();
+    renderList();
+    setBackupStatus(`✓ ${Object.keys(orders).length} Aufträge aus Cloud geladen`, 'var(--status-green)');
+    showToast('Cloud-Sync abgeschlossen ✓');
+  } catch(e) {
+    setBackupStatus('Fehler: ' + e.message, 'var(--status-red)');
+  }
+}
+window.syncFromCloud = syncFromCloud;
 
 // ===== INIT =====
 async function init() {
