@@ -793,7 +793,7 @@
   #pdfFrame { width: 100%; height: 70vh; border: none; }
 
   /* ===== DATA MATRIX ===== */
-  #dmCanvas { max-width: 200px; }
+
 
   /* ===== PROGRESS ===== */
   .upload-progress {
@@ -918,20 +918,31 @@
   </div>
 </div>
 
-<!-- DATA MATRIX MODAL -->
-<div id="dmModal" class="modal-overlay">
-  <div class="modal" style="max-width:400px">
+<!-- AUFTRAGSLABEL MODAL -->
+<div id="labelModal" class="modal-overlay">
+  <div class="modal" style="max-width:900px">
     <div class="modal-header">
-      <span class="modal-title">Data Matrix Code</span>
-      <button class="btn-icon" onclick="document.getElementById('dmModal').classList.remove('open')">✕</button>
+      <span class="modal-title">🏷 Auftragslabel — DIN A5 quer</span>
+      <button class="btn-icon" onclick="document.getElementById('labelModal').classList.remove('open')">✕</button>
     </div>
-    <div class="modal-body" style="text-align:center">
-      <canvas id="dmCanvas" style="max-width:200px;margin:0 auto 16px;display:block"></canvas>
-      <p id="dmUrl" style="font-size:11px;color:var(--gray-500);word-break:break-all;margin-bottom:16px"></p>
+    <div class="modal-body" style="background:var(--gray-100);padding:24px;display:flex;justify-content:center">
+      <!-- DIN A5 quer: 148mm × 210mm, at 96dpi → 559×794px. We render at ~70% for screen preview -->
+      <div id="labelPreview" style="
+        width:794px; height:559px;
+        background:#fff;
+        border:1px solid var(--gray-300);
+        box-shadow:var(--shadow-lg);
+        position:relative;
+        font-family:'DM Sans',sans-serif;
+        overflow:hidden;
+        transform-origin:top left;
+      ">
+        <!-- Will be rendered by JS -->
+      </div>
     </div>
     <div class="modal-footer">
-      <button class="btn-primary" onclick="printDataMatrix()">🖨️ Drucken</button>
-      <button class="btn-secondary" onclick="document.getElementById('dmModal').classList.remove('open')">Schließen</button>
+      <button class="btn-primary" onclick="printAuftragslabel()">🖨️ Auftragslabel drucken</button>
+      <button class="btn-secondary" onclick="document.getElementById('labelModal').classList.remove('open')">Schließen</button>
     </div>
   </div>
 </div>
@@ -1017,7 +1028,7 @@
       </div>
       <div class="detail-actions">
         <button class="btn-secondary" onclick="exportPDF()">📄 PDF exportieren</button>
-        <button class="btn-secondary" onclick="showDataMatrix()">⬛ Data Matrix</button>
+        <button class="btn-secondary" onclick="showAuftragslabel()">🏷 Auftragslabel</button>
         <button class="btn-secondary" onclick="duplicateOrder()">⧉ Duplizieren</button>
         <button class="btn-danger" onclick="deleteOrderConfirm()">🗑 Löschen</button>
         <button class="btn-primary" onclick="saveOrder()">💾 Speichern</button>
@@ -1244,7 +1255,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, collection, addDoc, getDocs, deleteDoc, updateDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, collection, addDoc, getDocs, deleteDoc, updateDoc, query, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
 const firebaseConfig = {
@@ -1284,11 +1295,14 @@ async function pushToFirebase(silent) {
   const dot = document.getElementById('sync-dot');
   const txt = document.getElementById('sync-text');
   try {
-    const arr = Object.values(orders);
-    await setDoc(doc(db, COLLECTION, "main"), { orders: arr, updatedAt: new Date().toISOString() });
+    const now = new Date().toISOString();
+    // Stamp each order with current updatedAt so realtime listener can detect changes
+    const arr = Object.values(orders).map(o => ({...o, updatedAt: now}));
+    arr.forEach(o => { if(orders[o.id]) orders[o.id].updatedAt = now; });
+    await setDoc(doc(db, COLLECTION, "main"), { orders: arr, updatedAt: now });
     localStorage.setItem('auftragsplanung_orders', JSON.stringify(arr));
     if (dot) dot.className = 'synced';
-    if (txt) txt.textContent = 'Gespeichert';
+    if (txt) txt.textContent = 'Live';
     if (!silent) showToast('Gespeichert ✓');
   } catch(e) {
     console.error(e);
@@ -2209,55 +2223,183 @@ async function exportPDF() {
 }
 window.exportPDF = exportPDF;
 
-// ===== DATA MATRIX =====
-function showDataMatrix() {
+// ===== AUFTRAGSLABEL =====
+function showAuftragslabel() {
   if (!currentOrderId) return;
-  const url = window.location.href.split('?')[0] + '?order=' + currentOrderId;
-  const el = document.getElementById('dmUrl');
-  if (el) el.textContent = url;
+  saveOrder();
+  const o = orders[currentOrderId];
+  const orderUrl = window.location.href.split('?')[0] + '?order=' + currentOrderId;
 
+  // Generate QR/Data Matrix code as canvas data URL
+  let qrDataUrl = '';
   try {
     const qr = qrcode(0, 'M');
-    qr.addData(url);
+    qr.addData(orderUrl);
     qr.make();
-    const canvas = document.getElementById('dmCanvas');
-    if (canvas) {
-      const size = 200;
-      const cellSize = Math.floor(size / qr.getModuleCount());
-      canvas.width = qr.getModuleCount() * cellSize;
-      canvas.height = qr.getModuleCount() * cellSize;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#000000';
-      for (let r = 0; r < qr.getModuleCount(); r++) {
-        for (let c = 0; c < qr.getModuleCount(); c++) {
-          if (qr.isDark(r, c)) {
-            ctx.fillRect(c*cellSize, r*cellSize, cellSize, cellSize);
-          }
-        }
+    const qrSize = 120; // px on label
+    const cellSize = Math.floor(qrSize / qr.getModuleCount());
+    const actualSize = qr.getModuleCount() * cellSize;
+    const qrCanvas = document.createElement('canvas');
+    qrCanvas.width = actualSize;
+    qrCanvas.height = actualSize;
+    const ctx = qrCanvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, actualSize, actualSize);
+    ctx.fillStyle = '#000';
+    for (let r = 0; r < qr.getModuleCount(); r++) {
+      for (let c = 0; c < qr.getModuleCount(); c++) {
+        if (qr.isDark(r, c)) ctx.fillRect(c*cellSize, r*cellSize, cellSize, cellSize);
       }
     }
-  } catch(e) { console.error(e); }
+    qrDataUrl = qrCanvas.toDataURL('image/png');
+  } catch(e) { console.error('QR error', e); }
 
-  const m = document.getElementById('dmModal');
+  // Logo
+  const logoImg = document.querySelector('.logo-img');
+  const logoSrc = logoImg ? logoImg.src : '';
+
+  // Render label HTML — DIN A5 quer at 794×559px (96dpi ≈ real print size)
+  const pad = 32;
+  const preview = document.getElementById('labelPreview');
+  if (!preview) return;
+
+  preview.innerHTML = `
+    <style>
+      #labelInner * { box-sizing: border-box; }
+      #labelInner { font-family: 'DM Sans', sans-serif; width:100%; height:100%; padding:${pad}px; position:relative; }
+      #labelInner .lbl-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:24px; }
+      #labelInner .lbl-title  { font-size:13px; font-weight:600; text-transform:uppercase; letter-spacing:0.12em; color:#888; }
+      #labelInner .lbl-rechnr { font-size:28px; font-weight:700; color:#0a0a0a; line-height:1.1; margin-top:4px; }
+      #labelInner .lbl-logo   { height:28px; object-fit:contain; }
+      #labelInner .lbl-body   { display:flex; gap:32px; }
+      #labelInner .lbl-fields { flex:1; display:grid; grid-template-columns:1fr 1fr; gap:0; }
+      #labelInner .lbl-field  { padding:8px 12px 8px 0; border-bottom:1px solid #f0f0f0; }
+      #labelInner .lbl-field:nth-last-child(-n+2) { border-bottom:none; }
+      #labelInner .lbl-flabel { font-size:9px; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; color:#888; margin-bottom:3px; }
+      #labelInner .lbl-fval   { font-size:14px; font-weight:500; color:#0a0a0a; }
+      #labelInner .lbl-fval.status { display:inline-flex; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:700; }
+      #labelInner .status-inplanung   { background:#fff5f5; color:#e53e3e; }
+      #labelInner .status-inarbeit    { background:#fffff0; color:#d69e2e; }
+      #labelInner .status-ready2ship  { background:#f0fff4; color:#38a169; }
+      #labelInner .status-abgeschlossen { background:#f0fff4; color:#38a169; }
+      #labelInner .lbl-qr     { display:flex; flex-direction:column; align-items:center; gap:6px; flex-shrink:0; }
+      #labelInner .lbl-qr img { width:130px; height:130px; image-rendering:pixelated; border:1px solid #e0e0e0; }
+      #labelInner .lbl-qr-label { font-size:8px; color:#888; text-align:center; max-width:130px; word-break:break-all; line-height:1.3; }
+      #labelInner .lbl-divider { height:1px; background:#e0e0e0; margin:20px 0; }
+      #labelInner .lbl-footer { position:absolute; bottom:${pad}px; left:${pad}px; right:${pad}px; display:flex; align-items:center; justify-content:space-between; }
+      #labelInner .lbl-footer-app { font-size:9px; color:#aaa; text-transform:uppercase; letter-spacing:0.06em; }
+      #labelInner .lbl-footer-url { font-size:8px; color:#bbb; max-width:400px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    </style>
+    <div id="labelInner">
+      <!-- Header: Auftrag-Info links, Logo rechts -->
+      <div class="lbl-header">
+        <div>
+          <div class="lbl-title">Auftragslabel</div>
+          <div class="lbl-rechnr">${o.rechnungsNr||'—'}</div>
+        </div>
+        ${logoSrc ? `<img src="${logoSrc}" class="lbl-logo" alt="VANtastic">` : `<span style="font-size:18px;font-weight:800;letter-spacing:-0.02em">VAN<span style="font-weight:300">TASTIC</span></span>`}
+      </div>
+
+      <div class="lbl-divider"></div>
+
+      <!-- Body: Felder links, QR rechts -->
+      <div class="lbl-body">
+        <div class="lbl-fields">
+          <div class="lbl-field">
+            <div class="lbl-flabel">Modul</div>
+            <div class="lbl-fval">${o.modul||'—'}</div>
+          </div>
+          <div class="lbl-field">
+            <div class="lbl-flabel">Kunde</div>
+            <div class="lbl-fval">${o.kunde||'—'}</div>
+          </div>
+          <div class="lbl-field">
+            <div class="lbl-flabel">Produkt-Nr.</div>
+            <div class="lbl-fval">${o.produktNr||'—'}</div>
+          </div>
+          <div class="lbl-field">
+            <div class="lbl-flabel">Liefertermin</div>
+            <div class="lbl-fval">${formatDate(o.liefertermin)}</div>
+          </div>
+          <div class="lbl-field">
+            <div class="lbl-flabel">Erstellungsdatum</div>
+            <div class="lbl-fval">${formatDate(o.erstellungsdatum)}</div>
+          </div>
+          <div class="lbl-field">
+            <div class="lbl-flabel">Status</div>
+            <div class="lbl-fval">
+              <span class="status ${statusClass(o.status)}">${statusLabel(o.status)}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- QR / Data Matrix Code -->
+        <div class="lbl-qr">
+          ${qrDataUrl ? `<img src="${qrDataUrl}" alt="QR Code">` : '<div style="width:130px;height:130px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;font-size:11px;color:#aaa">QR N/A</div>'}
+          <div class="lbl-qr-label">Scan → Auftrag öffnen</div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="lbl-footer">
+        <span class="lbl-footer-app">Auftragsplanung VANtastic</span>
+        <span class="lbl-footer-url">${orderUrl}</span>
+      </div>
+    </div>
+  `;
+
+  // Scale preview to fit modal (794px wide might overflow on small screens)
+  const scaleFit = () => {
+    const container = preview.parentElement;
+    if (!container) return;
+    const available = container.clientWidth - 48;
+    const scale = Math.min(1, available / 794);
+    preview.style.transform = `scale(${scale})`;
+    preview.parentElement.style.height = Math.ceil(559 * scale) + 'px';
+  };
+  setTimeout(scaleFit, 50);
+  window.addEventListener('resize', scaleFit);
+
+  // Store URL for print
+  preview.dataset.orderUrl = orderUrl;
+
+  const m = document.getElementById('labelModal');
   if (m) m.classList.add('open');
 }
-window.showDataMatrix = showDataMatrix;
+window.showAuftragslabel = showAuftragslabel;
 
-function printDataMatrix() {
-  const canvas = document.getElementById('dmCanvas');
-  const url = document.getElementById('dmUrl')?.textContent||'';
-  if (!canvas) return;
-  const w = window.open('', '_blank');
-  w.document.write(`<!DOCTYPE html><html><body style="text-align:center;padding:40px;font-family:sans-serif">
-    <h3 style="margin-bottom:20px">Auftrag QR-Code</h3>
-    <img src="${canvas.toDataURL()}" style="max-width:200px"><br>
-    <small style="font-size:10px;color:#666;word-break:break-all">${url}</small>
-    <script>window.onload=()=>{window.print();window.close()}<\/script>
-  </body></html>`);
+function printAuftragslabel() {
+  const preview = document.getElementById('labelPreview');
+  if (!preview) return;
+  const inner = preview.querySelector('#labelInner');
+  if (!inner) return;
+
+  const w = window.open('', '_blank', 'width=900,height=700');
+  w.document.write(`<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<title>Auftragslabel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  @page { size: A5 landscape; margin: 0; }
+  html, body { margin: 0; padding: 0; width: 210mm; height: 148mm; }
+  body { font-family: 'DM Sans', sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .print-wrapper { width: 210mm; height: 148mm; position: relative; overflow: hidden; }
+  ${preview.querySelector('style')?.textContent || ''}
+  #labelInner { padding: 28px !important; }
+</style>
+</head><body>
+<div class="print-wrapper">${inner.outerHTML}</div>
+<script>
+  window.onload = function() {
+    setTimeout(function() { window.print(); window.close(); }, 600);
+  };
+<\/script>
+</body></html>`);
+  w.document.close();
 }
-window.printDataMatrix = printDataMatrix;
+window.printAuftragslabel = printAuftragslabel;
 
 // ===== DEEP LINK =====
 function checkDeepLink() {
@@ -2356,6 +2498,49 @@ async function syncFromCloud() {
 }
 window.syncFromCloud = syncFromCloud;
 
+// ===== REALTIME SYNC =====
+let realtimeUnsubscribe = null;
+
+function startRealtimeSync() {
+  if (realtimeUnsubscribe) realtimeUnsubscribe(); // cleanup existing
+  try {
+    realtimeUnsubscribe = onSnapshot(doc(db, COLLECTION, "main"), (snap) => {
+      // Don't overwrite if we are currently mid-sync (syncTimer active)
+      if (syncTimer) return;
+      if (snap.exists()) {
+        const data = snap.data();
+        const arr = data.orders || [];
+        // Check if remote data differs from local
+        const remoteHash = JSON.stringify(arr.map(o=>o.id+':'+(o.updatedAt||'')).sort());
+        const localHash  = JSON.stringify(Object.values(orders).map(o=>o.id+':'+(o.updatedAt||'')).sort());
+        if (remoteHash !== localHash) {
+          orders = {};
+          arr.forEach(o => { if(o.id) orders[o.id] = o; });
+          localStorage.setItem('auftragsplanung_orders', JSON.stringify(arr));
+          // Re-render list if visible; re-render detail if open
+          const listActive = document.getElementById('viewList')?.classList.contains('active');
+          if (listActive) renderList();
+          if (currentOrderId && orders[currentOrderId]) {
+            // Soft-refresh fields only if no form is dirty
+            const dot = document.getElementById('sync-dot');
+            if (dot && dot.className !== 'syncing') {
+              // just refresh list counts silently
+            }
+          }
+          const dot = document.getElementById('sync-dot');
+          const txt = document.getElementById('sync-text');
+          if (dot) dot.className = 'synced';
+          if (txt) txt.textContent = 'Live';
+        }
+      }
+    }, (err) => {
+      console.warn('Realtime sync error:', err);
+    });
+  } catch(e) {
+    console.warn('onSnapshot setup failed:', e);
+  }
+}
+
 // ===== INIT =====
 async function init() {
   const overlay = document.getElementById('loadingOverlay');
@@ -2368,7 +2553,9 @@ async function init() {
   const dot = document.getElementById('sync-dot');
   const txt = document.getElementById('sync-text');
   if (dot) dot.className = 'synced';
-  if (txt) txt.textContent = 'Bereit';
+  if (txt) txt.textContent = 'Live';
+  // Start realtime listener for multi-user sync
+  startRealtimeSync();
 }
 
 init();
